@@ -124,7 +124,7 @@ This project is open source and available under the [MIT License](LICENSE).
 
 ## 👨‍💻 Author
 
-Your Name - [GitHub](https://github.com/yourusername)
+rakamiracle - [GitHub](https://github.com/rakamiracle)
 
 ## 🙏 Acknowledgments
 
