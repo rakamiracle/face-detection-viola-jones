@@ -1,0 +1,10 @@
+no,filename,expected,detected,classification,process_time
+1,18.png,1,1,TP,20
+2,1.png,1,1,TP,69
+3,21.png,1,1,TP,35
+4,23.png,1,1,TP,20
+5,26.png,1,1,TP,19
+6,25.png,1,1,TP,13
+7,11.png,1,1,TP,23
+8,28.png,1,1,TP,19
+9,30.png,1,1,TP,18
