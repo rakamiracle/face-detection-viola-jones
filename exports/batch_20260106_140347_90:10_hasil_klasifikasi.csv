@@ -1,0 +1,11 @@
+no,filename,kelas_asli,hasil_klasifikasi,expected_count,detected_count,classification,status,process_time
+1,25.png,Ada Wajah,Ada Wajah,1,1,TP,Benar,16
+2,55.JPG,Ada Wajah,Ada Wajah,1,1,TP,Benar,40
+3,50.png,Ada Wajah,Ada Wajah,1,2,TP,Benar,50
+4,69.JPG,Ada Wajah,Ada Wajah,1,4,TP,Benar,285
+5,86.JPG,Ada Wajah,Ada Wajah,1,1,TP,Benar,175
+6,22.png,Ada Wajah,Ada Wajah,1,1,TP,Benar,21
+7,21.png,Ada Wajah,Ada Wajah,1,1,TP,Benar,34
+8,15.png,Ada Wajah,Ada Wajah,1,1,TP,Benar,27
+9,95.JPG,Ada Wajah,Ada Wajah,1,1,TP,Benar,40
+10,88.JPG,Ada Wajah,Ada Wajah,1,1,TP,Benar,123

@@ -271,9 +271,77 @@ def hitung_metrik(tp, fp, tn, fn):
 
 
 # ============================================================
+# ANALISIS DATA AWAL (TABEL 3.1)
+# ============================================================
+def analyze_initial_data(images_data, ground_truth):
+    """
+    Analisis data awal untuk Tabel 3.1 di laporan
+    """
+    data_info = []
+    
+    for idx, ((image, filename), label) in enumerate(zip(images_data, ground_truth), 1):
+        h, w = image.shape[:2]
+        file_size = os.path.getsize(f"batch_test/{filename}") if os.path.exists(f"batch_test/{filename}") else 0
+        
+        data_info.append({
+            'no': idx,
+            'filename': filename,
+            'format': filename.split('.')[-1].upper(),
+            'size_kb': round(file_size / 1024, 2) if file_size > 0 else 0,
+            'resolution': f"{w}x{h}",
+            'width': w,
+            'height': h,
+            'label': label,
+            'kelas': 'Ada Wajah (1)' if label > 0 else 'Tidak Ada (0)'
+        })
+    
+    # Statistik
+    total = len(data_info)
+    kelas_1 = sum(1 for d in data_info if d['label'] > 0)
+    kelas_0 = total - kelas_1
+    
+    stats = {
+        'total': total,
+        'kelas_0': kelas_0,
+        'kelas_1': kelas_1,
+        'distribusi': 'Seimbang' if abs(kelas_0 - kelas_1) <= 10 else 'Tidak Seimbang'
+    }
+    
+    return data_info, stats
+
+
+# ============================================================
+# SIMPAN SAMPLE IMAGES (TP, FP, TN, FN)
+# ============================================================
+def save_sample_images(image, filename, classification, batch_name, result_image):
+    """
+    Simpan contoh gambar untuk setiap klasifikasi
+    """
+    try:
+        sample_folder = f"results/{batch_name}_samples"
+        if not os.path.exists(sample_folder):
+            os.makedirs(sample_folder)
+        
+        # Simpan maksimal 3 sample per klasifikasi
+        class_folder = os.path.join(sample_folder, classification)
+        if not os.path.exists(class_folder):
+            os.makedirs(class_folder)
+        
+        # Cek jumlah file sudah ada
+        existing = len([f for f in os.listdir(class_folder) if f.endswith('.jpg')])
+        if existing < 3:
+            save_path = os.path.join(class_folder, f"{classification}_{existing+1}_{filename}")
+            cv2.imwrite(save_path, result_image)
+            return save_path
+    except Exception as e:
+        print(f"Error saving sample: {e}")
+    return None
+
+
+# ============================================================
 # BATCH TEST DENGAN SPLIT RATIO (100 DATA)
 # ============================================================
-def batch_test_with_split(images_data, ground_truth, split_ratio='70:30'):
+def batch_test_with_split(images_data, ground_truth, split_ratio='70:30', batch_name='batch'):
     """
     Test dengan pembagian data (simulasi train:test)
     Karena pakai pre-trained model, ini hanya simulasi pembagian data uji
@@ -296,6 +364,8 @@ def batch_test_with_split(images_data, ground_truth, split_ratio='70:30'):
     results = []
     tp = fp = tn = fn = 0
     feature_data = []
+    sample_images = {'TP': [], 'FP': [], 'TN': [], 'FN': []}
+    total_process_time = 0
     
     for idx in test_indices:
         image, filename = images_data[idx]
@@ -303,6 +373,7 @@ def batch_test_with_split(images_data, ground_truth, split_ratio='70:30'):
         
         result = deteksi_wajah_lengkap(image.copy(), detect_smile=False)
         detected = result['face_count']
+        total_process_time += result['process_time']
         
         # Klasifikasi
         if expected > 0 and detected > 0:
@@ -317,6 +388,17 @@ def batch_test_with_split(images_data, ground_truth, split_ratio='70:30'):
         else:
             fn += 1
             classification = 'FN'
+        
+        # Simpan sample image (maksimal 3 per klasifikasi)
+        if len(sample_images[classification]) < 3:
+            sample_path = save_sample_images(image, filename, classification, batch_name, result['image'])
+            if sample_path:
+                sample_images[classification].append({
+                    'filename': filename,
+                    'path': sample_path,
+                    'expected': expected,
+                    'detected': detected
+                })
         
         results.append({
             'no': len(results) + 1,
@@ -340,13 +422,19 @@ def batch_test_with_split(images_data, ground_truth, split_ratio='70:30'):
     
     metrics = hitung_metrik(tp, fp, tn, fn)
     
+    # Tambahkan info waktu proses
+    avg_time = round(total_process_time / len(test_indices), 2) if len(test_indices) > 0 else 0
+    
     return {
         'results': results,
         'features': feature_data,
         'confusion_matrix': {'TP': tp, 'FP': fp, 'TN': tn, 'FN': fn},
         'metrics': metrics,
         'split_ratio': split_ratio,
-        'total_images': len(test_indices)
+        'total_images': len(test_indices),
+        'sample_images': sample_images,
+        'total_process_time': total_process_time,
+        'avg_process_time': avg_time
     }
 
 
@@ -502,13 +590,23 @@ def batch_upload():
         else:
             ground_truth = [int(x) for x in ground_truth]
         
-        # TEST 3 SKENARIO
+        # ANALISIS DATA AWAL (TABEL 3.1)
+        data_info, data_stats = analyze_initial_data(images_data, ground_truth)
+        
+        # Export CSV Data Awal
         batch_name = f"batch_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        df_data_info = pd.DataFrame(data_info)
+        csv_data_info_path = f"exports/{batch_name}_data_awal.csv"
+        df_data_info.to_csv(csv_data_info_path, index=False)
+        
+        print(f"✅ Data Awal: {data_stats['total']} gambar (Kelas 0: {data_stats['kelas_0']}, Kelas 1: {data_stats['kelas_1']})")
+        
+        # TEST 3 SKENARIO
         all_results = []
         
         for split_ratio in ['70:30', '80:20', '90:10']:
             print(f"🔄 Testing {split_ratio}...")
-            batch_result = batch_test_with_split(images_data, ground_truth, split_ratio)
+            batch_result = batch_test_with_split(images_data, ground_truth, split_ratio, batch_name)
             
             # Simpan ke database
             conn = sqlite3.connect('database/faces.db')
@@ -569,19 +667,35 @@ def batch_upload():
                 'recall': batch_result['metrics']['recall'],
                 'f1_score': batch_result['metrics']['f1_score'],
                 'sensitivity': batch_result['metrics']['sensitivity'],
-                'specificity': batch_result['metrics']['specificity']
+                'specificity': batch_result['metrics']['specificity'],
+                'sample_images': batch_result['sample_images'],
+                'total_process_time': batch_result['total_process_time'],
+                'avg_process_time': batch_result['avg_process_time']
             })
             
-            print(f"✅ {split_ratio} completed - Accuracy: {batch_result['metrics']['accuracy']}%")
+            print(f"✅ {split_ratio} completed - Accuracy: {batch_result['metrics']['accuracy']}% (Avg time: {batch_result['avg_process_time']}ms)")
         
         # Buat grafik perbandingan (SEPERTI GRAFIK DI LAPORAN)
         chart_path = create_comparison_chart(all_results)
         print(f"📊 Chart created: {chart_path}")
         
+        # Parameter Viola-Jones yang digunakan
+        viola_jones_params = {
+            'scaleFactor': 1.1,
+            'minNeighbors': 5,
+            'minSize': '(30, 30)',
+            'flags': 'CASCADE_SCALE_IMAGE',
+            'algorithm': 'Viola-Jones Cascade Classifier',
+            'model': 'haarcascade_frontalface_default.xml (Pre-trained OpenCV)'
+        }
+        
         return jsonify({
             'success': True,
             'batch_name': batch_name,
             'total_images': len(images_data),
+            'data_stats': data_stats,
+            'csv_data_info': csv_data_info_path,
+            'viola_jones_params': viola_jones_params,
             'results': all_results,
             'chart_path': chart_path
         })

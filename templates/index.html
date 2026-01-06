@@ -366,6 +366,55 @@
                 <div class="card hidden" id="batchResultBox">
                     <h3>📊 Batch Test Results - 3 Scenarios</h3>
                     
+                    <!-- DATA STATISTICS -->
+                    <div class="result-card" id="dataStatsBox" style="display:none; background:#e3f2fd; border-color:#2196F3;">
+                        <h4 style="color:#1565c0;">📋 Data Statistics</h4>
+                        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:10px; margin-top:10px;">
+                            <div style="background:white; padding:15px; border-radius:5px;">
+                                <strong>Total Data:</strong> <span id="statsTotal">0</span>
+                            </div>
+                            <div style="background:white; padding:15px; border-radius:5px;">
+                                <strong>Kelas 0 (Tidak Ada):</strong> <span id="statsKelas0">0</span>
+                            </div>
+                            <div style="background:white; padding:15px; border-radius:5px;">
+                                <strong>Kelas 1 (Ada Wajah):</strong> <span id="statsKelas1">0</span>
+                            </div>
+                            <div style="background:white; padding:15px; border-radius:5px;">
+                                <strong>Distribusi:</strong> <span id="statsDistribusi">-</span>
+                            </div>
+                        </div>
+                        <button class="btn btn-download" onclick="downloadCSV(currentDataInfoCSV)" style="margin-top:15px;">
+                            📥 Download Tabel Data Awal (CSV)
+                        </button>
+                    </div>
+                    
+                    <!-- VIOLA-JONES PARAMETERS -->
+                    <div class="result-card" id="paramsBox" style="display:none; background:#fff3e0; border-color:#FF9800;">
+                        <h4 style="color:#e65100;">⚙️ Parameter Viola-Jones Cascade Classifier</h4>
+                        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(250px, 1fr)); gap:10px; margin-top:10px;">
+                            <div class="feature-item">
+                                <span>scaleFactor</span>
+                                <span><strong id="paramScaleFactor">-</strong></span>
+                            </div>
+                            <div class="feature-item">
+                                <span>minNeighbors</span>
+                                <span><strong id="paramMinNeighbors">-</strong></span>
+                            </div>
+                            <div class="feature-item">
+                                <span>minSize</span>
+                                <span><strong id="paramMinSize">-</strong></span>
+                            </div>
+                            <div class="feature-item">
+                                <span>flags</span>
+                                <span><strong id="paramFlags">-</strong></span>
+                            </div>
+                            <div class="feature-item" style="grid-column: 1/-1;">
+                                <span>Model</span>
+                                <span><strong id="paramModel">-</strong></span>
+                            </div>
+                        </div>
+                    </div>
+                    
                     <div class="scenario-results" id="scenarioResults"></div>
                     
                     <div class="chart-container" id="chartContainer" style="display:none;">
@@ -402,6 +451,7 @@
         let batchFiles = [];
         let currentBatchResults = [];
         let currentChartPath = '';
+        let currentDataInfoCSV = '';
 
         // TAB SWITCHING
         function switchTab(tab) {
@@ -611,6 +661,26 @@
                 if (data.success) {
                     currentBatchResults = data.results;
                     currentChartPath = data.chart_path;
+                    currentDataInfoCSV = data.csv_data_info;
+                    
+                    // Display Data Statistics
+                    if (data.data_stats) {
+                        document.getElementById('statsTotal').textContent = data.data_stats.total;
+                        document.getElementById('statsKelas0').textContent = data.data_stats.kelas_0;
+                        document.getElementById('statsKelas1').textContent = data.data_stats.kelas_1;
+                        document.getElementById('statsDistribusi').textContent = data.data_stats.distribusi;
+                        document.getElementById('dataStatsBox').style.display = 'block';
+                    }
+                    
+                    // Display Viola-Jones Parameters
+                    if (data.viola_jones_params) {
+                        document.getElementById('paramScaleFactor').textContent = data.viola_jones_params.scaleFactor;
+                        document.getElementById('paramMinNeighbors').textContent = data.viola_jones_params.minNeighbors;
+                        document.getElementById('paramMinSize').textContent = data.viola_jones_params.minSize;
+                        document.getElementById('paramFlags').textContent = data.viola_jones_params.flags;
+                        document.getElementById('paramModel').textContent = data.viola_jones_params.model;
+                        document.getElementById('paramsBox').style.display = 'block';
+                    }
                     
                     // Display results untuk 3 skenario
                     let resultsHtml = '';
@@ -618,6 +688,11 @@
                         resultsHtml += `
                             <div class="scenario-card">
                                 <h4>📊 Skenario ${result.split_ratio}</h4>
+                                <p style="text-align:center; color:#666; font-size:14px; margin-bottom:15px;">
+                                    Data Uji: ${result.metrics.total_images || Math.round(data.total_images * (result.split_ratio === '70:30' ? 0.3 : result.split_ratio === '80:20' ? 0.2 : 0.1))} gambar | 
+                                    Waktu Total: ${(result.total_process_time / 1000).toFixed(2)}s | 
+                                    Rata-rata: ${result.avg_process_time}ms/gambar
+                                </p>
                                 
                                 <div class="confusion-matrix">
                                     <div class="matrix-cell tp">
@@ -650,6 +725,24 @@
                                     <div class="stat-card" style="background:#FF9800;">
                                         <h4>Spesifisitas</h4>
                                         <p>${result.metrics.specificity}%</p>
+                                    </div>
+                                </div>
+                                
+                                <!-- Sample Images -->
+                                <div style="margin-top:20px; padding:15px; background:#f5f5f5; border-radius:10px;">
+                                    <h5 style="margin-bottom:10px; color:#333;">📸 Sample Images (${result.split_ratio})</h5>
+                                    <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:10px; font-size:12px;">
+                                        ${['TP', 'FP', 'TN', 'FN'].map(type => {
+                                            const samples = result.sample_images[type] || [];
+                                            const count = samples.length;
+                                            const color = type === 'TP' || type === 'TN' ? '#4CAF50' : '#f44336';
+                                            return `
+                                                <div style="padding:10px; background:white; border-radius:5px; border-left:3px solid ${color};">
+                                                    <strong>${type}</strong><br>
+                                                    <span style="color:#666;">${count} sample${count !== 1 ? 's' : ''}</span>
+                                                </div>
+                                            `;
+                                        }).join('')}
                                     </div>
                                 </div>
                                 
